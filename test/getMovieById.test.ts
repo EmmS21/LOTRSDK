@@ -1,0 +1,86 @@
+import { getMovieById } from '../src';
+import { MovieApiResponse } from '../src/commons/types';
+import { MockHttpClient } from '../src/clients/mockHttpClient';
+import { mockedMovieResponseHandler } from '../src/helpers/movieRespUtils';
+import {
+  setAuthToken,
+  ApiError,
+  NetworkError,
+  UnexpectedStatusCodeError,
+  AuthorizationError,
+} from '../src';
+
+describe('getMovieById API endpoint', () => {
+  let mockHttpClient: MockHttpClient;
+  const validId = '1234567890';
+
+  beforeEach(() => {
+    mockHttpClient = new MockHttpClient();
+    setAuthToken('testApiKey');
+  });
+
+  it('function, when called successfully with a valid ID, returns the correct movie data', async () => {
+    const mockedResponse = mockedMovieResponseHandler<MovieApiResponse>({}, 'Movie 1');
+    mockHttpClient.setMockResponse(mockedResponse);
+
+    const respData = await getMovieById(validId, mockHttpClient);
+    expect(respData.docs).toHaveLength(1);
+    expect(respData.docs[0].name).toBe('Movie 1');
+  });
+
+  const errorCases = [
+    { error: new ApiError('Not Found', 404), expectedError: ApiError },
+    {
+      error: new NetworkError('Network error', 500),
+      expectedError: NetworkError,
+    },
+    {
+      error: new UnexpectedStatusCodeError('Not Found', 404),
+      expectedError: UnexpectedStatusCodeError,
+    },
+    {
+      error: new AuthorizationError('Forbidden', 403),
+      expectedError: AuthorizationError,
+    },
+    {
+      error: new Error('Unknown error'),
+      expectedError: UnexpectedStatusCodeError,
+    },
+  ];
+
+  errorCases.forEach(({ error, expectedError }) => {
+    it(`handles error case: ${error.message} for invalid movie ID`, async () => {
+      const statusCode = error instanceof ApiError ? error.statusCode : 500;
+      const mockedError = mockedMovieResponseHandler<Error>(error, error.message, statusCode);
+      mockHttpClient.setMockResponse(mockedError);
+
+      await expect(getMovieById(validId, mockHttpClient)).rejects.toThrow(expectedError);
+    });
+  });
+
+  it('handles incorrect movie ID error', async () => {
+    const incorrectId = '999';
+    const error = new ApiError('Not Found', 404);
+    const mockedError = mockedMovieResponseHandler<Error>(error, error.message, error.statusCode);
+    mockHttpClient.setMockResponse(mockedError);
+
+    await expect(getMovieById(incorrectId, mockHttpClient)).rejects.toThrow(ApiError);
+  });
+
+  it('function handles empty response data gracefully', async () => {
+    const mockedResponse = mockedMovieResponseHandler<MovieApiResponse>({ docs: [] });
+    mockHttpClient.setMockResponse(mockedResponse);
+
+    const respData = await getMovieById(validId, mockHttpClient);
+    expect(respData.docs).toHaveLength(0);
+  });
+
+  it('handles incorrect apiKey error', async () => {
+    setAuthToken('incorrectApiKey');
+    const error = new AuthorizationError('Forbidden', 403);
+    const mockedError = mockedMovieResponseHandler<Error>(error, error.message, error.statusCode);
+    mockHttpClient.setMockResponse(mockedError);
+
+    await expect(getMovieById(validId, mockHttpClient)).rejects.toThrow(AuthorizationError);
+  });
+});
