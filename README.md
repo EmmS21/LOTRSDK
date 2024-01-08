@@ -1,6 +1,6 @@
 ## TypeScript SDK for Lord of the Rings API
 
-This TypeScript SDK provides a streamlines option to interact with the:
+This TypeScript SDK provides a streamlines option to interact with these endpoints:
 
 - /movie
 - /movie/${id}
